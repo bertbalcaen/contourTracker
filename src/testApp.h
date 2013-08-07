@@ -25,7 +25,9 @@ public:
 
     float cfMinRadius, cfMaxRadius, cfTreshold;
     float blurAmount, thresholdValue;
+    float xPosNormalized;
     
+    ofImage vidMirrored;
     ofImage diff;
     ofImage bg;
     ofImage grey;

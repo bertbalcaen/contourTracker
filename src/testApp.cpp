@@ -38,7 +38,7 @@ void testApp::setup() {
     float length = 320-xInit;
     gui = new ofxUICanvas(camWidth, 0, 320, 320);
     ofAddListener(gui->newGUIEvent, this, &testApp::guiEvent);
-    gui->addSlider("threshold ", 0.0, 255.0, &thresholdValue, length, dim);
+    gui->addSlider("threshold", 0.0, 255.0, &thresholdValue, length, dim);
     gui->addSlider("blur", 0.0, 255.0, &blurAmount, length, dim);
     gui->addSlider("contour min radius", 0.0, 255.0, &cfMinRadius, length, dim);
     gui->addSlider("contour max radius", 0.0, 255.0, &cfMaxRadius, length, dim);
@@ -59,7 +59,9 @@ void testApp::update() {
 	vidGrabber.update();
 	
 	if (vidGrabber.isFrameNew()){
-        absdiff(bg, vidGrabber, diff);
+        vidMirrored.setFromPixels(vidGrabber.getPixelsRef());
+        vidMirrored.mirror(false, true);
+        absdiff(bg, vidMirrored, diff);
 		blur(diff, blurAmount);
         convertColor(diff, grey, CV_RGB2GRAY);
         invert(grey, grey);
@@ -70,7 +72,9 @@ void testApp::update() {
 	}
     
     if(learnBg || once){
-        bg.setFromPixels(vidGrabber.getPixels(), vidGrabber.getWidth(), vidGrabber.getHeight(), OF_IMAGE_COLOR);
+        bg.setFromPixels(vidGrabber.getPixelsRef());
+        bg.mirror(false, true);
+        bg.update();
         learnBg = false;
         once = false;
     }
@@ -91,15 +95,17 @@ void testApp::update() {
     }
     sender.sendMessage(mMode);
     
+    // send normalized xPos of first blob to Resolume
     if(contourFinder.size() >= 1){
-        ofxOscMessage mTest;
         ofPoint center = toOf(contourFinder.getCentroid(0));
-        float test = ofMap(center.x, 0, camWidth, 0, 1);
-        cout << test << endl;
-        mTest.setAddress("/activeclip/video/position/values");
-        mTest.addFloatArg(test);
-        sender.sendMessage(mTest);
+        xPosNormalized = ofMap(center.x, 0, camWidth, 0, 1);
+    } else {
+        xPosNormalized = 0;
     }
+    ofxOscMessage mResolumeXpos;
+    mResolumeXpos.setAddress("/activeclip/video/position/values");
+    mResolumeXpos.addFloatArg(xPosNormalized);
+    sender.sendMessage(mResolumeXpos);
 
     ofxOscMessage mPos;
     if(contourFinder.size() >= 1){
@@ -128,21 +134,13 @@ void testApp::draw() {
 
         // draw cam
 		ofSetColor(255);
-        ofPushMatrix();
-        ofTranslate(camWidth/2, camHeight, 0);
-        ofScale(-1, 1);
-		vidGrabber.draw(0, 0, camWidth/2, camHeight/2);
-        ofPopMatrix();
+		vidMirrored.draw(0, camHeight, camWidth/2, camHeight/2);
         ofSetColor(255, 0, 0);
         ofDrawBitmapString("cam", 0, camHeight + 10);
         
         // draw bg
 		ofSetColor(255);
-        ofPushMatrix();
-        ofTranslate(camWidth, camHeight, 0);
-        ofScale(-1, 1);
-        bg.draw(0, 0, camWidth/2, camHeight/2);
-        ofPopMatrix();
+        bg.draw(camWidth/2, camHeight, camWidth/2, camHeight/2);
         ofSetColor(255, 0, 0);
         ofDrawBitmapString("bg", camWidth/2, camHeight + 10);
         
@@ -152,7 +150,7 @@ void testApp::draw() {
         ofSetColor(255, 0, 0);
         ofDrawBitmapString("diff", camWidth, camHeight + 10);
         
-        ofSetColor(255);
+        ofSetColor(255, 0, 0);
 		for(int i = 0; i < contourFinder.size(); i++) {
 			ofPoint center = toOf(contourFinder.getCenter(i));
 			ofPushMatrix();
@@ -217,7 +215,9 @@ void testApp::draw() {
     }
 
 	string buf;
-	buf = "sending osc messages to " + string(HOST) + " " + ofToString(PORT) + "\n" + "press 'b' to set background";
+	buf = "sending osc messages to " + string(HOST) + " " + ofToString(PORT) + "\n";
+    buf += "press 'b' to set background\n";
+    buf += "x pos normalized (0-1): " + ofToString(xPosNormalized);
     ofSetColor(255, 0, 0);
 	ofDrawBitmapString(buf, 10, 20);
 
