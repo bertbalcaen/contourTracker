@@ -5,7 +5,7 @@
 #include "ofxUI.h"
 #include "ofxOsc.h"
 
-#define HOST "localhost"
+#define HOST "192.168.1.100"
 #define PORT 12345
 
 class testApp : public ofBaseApp {

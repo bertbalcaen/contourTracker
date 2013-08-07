@@ -3,9 +3,10 @@
 *.mode1v3
 *.pbxuser
 
+xcuserdata/
+
 .svn/
 obj/
 bin/
 build/
 !data/
-

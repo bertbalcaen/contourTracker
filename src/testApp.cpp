@@ -59,7 +59,6 @@ void testApp::update() {
 	if (vidGrabber.isFrameNew()){
         absdiff(bg, vidGrabber, diff);
 		blur(diff, blurAmount);
-        diff.mirror(false, true);
         convertColor(diff, grey, CV_RGB2GRAY);
         invert(grey, grey);
         threshold(grey, thresholdValue, true);
@@ -90,6 +89,16 @@ void testApp::update() {
     }
     sender.sendMessage(mMode);
     
+    if(contourFinder.size() >= 1){
+        ofxOscMessage mTest;
+        ofPoint center = toOf(contourFinder.getCentroid(0));
+        float test = ofMap(center.x, 0, camWidth, 0, 1);
+        cout << test << endl;
+        mTest.setAddress("/activeclip/video/position/values");
+        mTest.addFloatArg(test);
+        sender.sendMessage(mTest);
+    }
+
     ofxOscMessage mPos;
     if(contourFinder.size() >= 1){
         ofPoint center = toOf(contourFinder.getCentroid(0));
@@ -127,7 +136,11 @@ void testApp::draw() {
         
         // draw bg
 		ofSetColor(255);
-        bg.draw(camWidth/2, camHeight, camWidth/2, camHeight/2);
+        ofPushMatrix();
+        ofTranslate(camWidth, camHeight, 0);
+        ofScale(-1, 1);
+        bg.draw(0, 0, camWidth/2, camHeight/2);
+        ofPopMatrix();
         ofSetColor(255, 0, 0);
         ofDrawBitmapString("bg", camWidth/2, camHeight + 10);
         
