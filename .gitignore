@@ -1,4 +1,6 @@
-bin/*.app
+bin/*.Application
+contourTracker.xcodeproj/project.xcworkspace/xcuserdata/bert.*
+bin/contourTrackerDebug.app/
 
 android/*/test link
 android/*/gen
