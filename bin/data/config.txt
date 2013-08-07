@@ -1,0 +1,4 @@
+video device id
+0
+framerate
+30

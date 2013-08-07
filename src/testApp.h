@@ -20,6 +20,9 @@ public:
     ofVideoGrabber 		vidGrabber;
     int 				camWidth;
     int 				camHeight;
+    int vidDeviceId;
+    float vidFrameRate;
+
     float cfMinRadius, cfMaxRadius, cfTreshold;
     float blurAmount, thresholdValue;
     
@@ -32,6 +35,8 @@ public:
     void exit();
     void guiEvent(ofxUIEventArgs &e);
     ofxUICanvas *gui;
+    
+    void readConfig();
     
     ofxOscSender sender;
 

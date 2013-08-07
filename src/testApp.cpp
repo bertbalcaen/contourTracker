@@ -10,10 +10,12 @@ void testApp::setup() {
 	
 	camWidth 		= 640;	// try to grab at this size.
 	camHeight 		= 480;
+    
+    readConfig();
 	
 	vidGrabber.setVerbose(true);
-	vidGrabber.setDeviceID(1);
-	vidGrabber.setDesiredFrameRate(120);
+	vidGrabber.setDeviceID(vidDeviceId);
+	vidGrabber.setDesiredFrameRate(vidFrameRate);
 	vidGrabber.initGrabber(camWidth,camHeight);
 	
 	// wait for half a frame before forgetting something
@@ -237,4 +239,27 @@ void testApp::exit(){
 
 void testApp::guiEvent(ofxUIEventArgs &e){
 	
+}
+
+void testApp::readConfig(){
+    ofBuffer buffer = ofBufferFromFile("config.txt");
+    if (buffer.size() == 0) {
+        cout << "Could not read serial config file " << endl;
+    } else {
+        cout << "Successfully read serial config file " << endl;
+    }
+    int counter = 0;
+    while (!buffer.isLastLine()) {
+        string line = buffer.getNextLine();
+        if (counter == 1) {
+            vidDeviceId = ofToInt(line);
+        } else if(counter == 3){
+            vidFrameRate = ofToInt(line);
+        }
+        counter ++;
+    }
+    buffer.clear();
+    cout << "Read settings from file: " << endl;
+    cout << "vidDeviceId: " << ofToString(vidDeviceId) << endl;
+    cout << "vidFrameRate: " << ofToString(vidFrameRate) << endl;
 }
