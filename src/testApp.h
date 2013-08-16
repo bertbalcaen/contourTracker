@@ -5,8 +5,6 @@
 #include "ofxUI.h"
 #include "ofxOsc.h"
 
-#define HOST "192.168.1.100"
-#define PORT 12345
 
 class testApp : public ofBaseApp {
 public:
@@ -39,7 +37,18 @@ public:
     ofxUICanvas *gui;
     
     void readConfig();
+    void connect();
+    void disconnect();
     
     ofxOscSender sender;
+    vector<float> vals;
+    float avg, avgSize;
+    float timer;
+    float maxTimer;
+    float timerDiff;
+    
+    string host;
+    int port;
+    bool bConnected = false;
 
 };
