@@ -12,7 +12,7 @@ void testApp::setup() {
 	camHeight 		= 480;
     
     readConfig();
-	
+
 	vidGrabber.setVerbose(true);
 	vidGrabber.setDeviceID(vidDeviceId);
 	vidGrabber.setDesiredFrameRate(vidFrameRate);
@@ -37,16 +37,25 @@ void testApp::setup() {
 	float xInit = 30;
     float length = 320-xInit;
     gui = new ofxUICanvas(camWidth, 0, 320, 320);
-    ofAddListener(gui->newGUIEvent, this, &testApp::guiEvent);
+    gui->addLabel("host");
+    gui->addTextInput("hostInput", "localhost");
+    gui->addLabel("port");
+    gui->addTextInput("portInput", "12345");
+    gui->addLabelToggle("connect", false);
     gui->addSlider("threshold", 0.0, 255.0, &thresholdValue, length, dim);
     gui->addSlider("blur", 0.0, 255.0, &blurAmount, length, dim);
     gui->addSlider("contour min radius", 0.0, 255.0, &cfMinRadius, length, dim);
     gui->addSlider("contour max radius", 0.0, 255.0, &cfMaxRadius, length, dim);
     gui->addSlider("contour threshold", 0.0, 255.0, &cfTreshold, length, dim);
+    gui->addSlider("avg size", 0.0, 50.0, &avgSize, length, dim);
+    gui->addSlider("max timer", 0.0, 200.0, &maxTimer, length, dim);
     gui->loadSettings("GUI/guiSettings.xml");
     gui->setTheme(OFX_UI_THEME_GRAYRED);
     
-    sender.setup(HOST, PORT);
+    // Should add listener only after gui element creation
+    ofAddListener(gui->newGUIEvent, this, &testApp::guiEvent);
+    
+    timer = 0;
     
 }
 
@@ -78,41 +87,66 @@ void testApp::update() {
         learnBg = false;
         once = false;
     }
-
-    ofxOscMessage mNumContours;
-    mNumContours.setAddress("/numContours");
-    mNumContours.addIntArg(contourFinder.size());
-    sender.sendMessage(mNumContours);
     
-    ofxOscMessage mMode;
-    mMode.setAddress("/mode");
-    if(contourFinder.size() == 0){
-        mMode.addStringArg("nobody");
-    } else if(contourFinder.size() == 1){
-        mMode.addStringArg("1 person");
-    } else if(contourFinder.size() > 1){
-        mMode.addStringArg("panic");
+    if (bConnected) {
+        ofxOscMessage mNumContours;
+        mNumContours.setAddress("/numContours");
+        mNumContours.addIntArg(contourFinder.size());
+        sender.sendMessage(mNumContours);
+    
+        ofxOscMessage mMode;
+        mMode.setAddress("/mode");
+        if(contourFinder.size() == 0){
+            mMode.addStringArg("nobody");
+        } else if(contourFinder.size() == 1){
+            mMode.addStringArg("1 person");
+        } else if(contourFinder.size() > 1){
+            mMode.addStringArg("panic");
+        }
+        sender.sendMessage(mMode);
     }
-    sender.sendMessage(mMode);
+    
+    if(contourFinder.size() == 1){
+        timer = ofGetElapsedTimef();
+    }
+    timerDiff = ofGetElapsedTimef() - timer;
     
     // send normalized xPos of first blob to Resolume
     if(contourFinder.size() >= 1){
         ofPoint center = toOf(contourFinder.getCentroid(0));
         xPosNormalized = ofMap(center.x, 0, camWidth, 0, 1);
     } else {
-        xPosNormalized = 0;
+//        xPosNormalized = 0;
     }
-    ofxOscMessage mResolumeXpos;
-    mResolumeXpos.setAddress("/activeclip/video/position/values");
-    mResolumeXpos.addFloatArg(xPosNormalized);
-    sender.sendMessage(mResolumeXpos);
+    vals.push_back(xPosNormalized);
+    if(vals.size() > avgSize){
+        vals.erase(vals.begin());
+    }
+    vector<float>::iterator iter = vals.begin();
+    float sum = 0;
+    for(int i = 0; i < vals.size(); i ++){
+        sum += vals.at(i);
+    }
+    avg = sum/vals.size();
+    if(timer > maxTimer){
+        avg = 0;
+    }
+    
+    if (bConnected) {
+        ofxOscMessage mResolumeXpos;
+        mResolumeXpos.setAddress("/activeclip/video/position/values");
+        mResolumeXpos.addFloatArg(avg);
+        sender.sendMessage(mResolumeXpos);
+    }
 
-    ofxOscMessage mPos;
-    if(contourFinder.size() >= 1){
-        ofPoint center = toOf(contourFinder.getCentroid(0));
-        mPos.addFloatArg(center.x);
-        mPos.addFloatArg(center.y);
-        sender.sendMessage(mPos);
+    if (bConnected) {
+        ofxOscMessage mPos;
+        if(contourFinder.size() >= 1){
+            ofPoint center = toOf(contourFinder.getCentroid(0));
+            mPos.addFloatArg(center.x);
+            mPos.addFloatArg(center.y);
+            sender.sendMessage(mPos);
+        }
     }
     
 }
@@ -215,11 +249,14 @@ void testApp::draw() {
     }
 
 	string buf;
-	buf = "sending osc messages to " + string(HOST) + " " + ofToString(PORT) + "\n";
+	buf = "sending osc messages to " + string(host) + " " + ofToString(port) + "\n";
     buf += "press 'b' to set background\n";
-    buf += "x pos normalized (0-1): " + ofToString(xPosNormalized);
+    buf += "x pos normalized (0-1): " + ofToString(avg) + "\n";
+    buf += "vidDeviceId: " + ofToString(vidDeviceId) + " vidFrameRate: " + ofToString(vidFrameRate) + "\n";
+    buf += "timerDiff: " + ofToString(timerDiff) + "\n";
     ofSetColor(255, 0, 0);
-	ofDrawBitmapString(buf, 10, 20);
+    if (bConnected)
+        ofDrawBitmapString(buf, 10, 20);
 
 }
 
@@ -233,12 +270,33 @@ void testApp::keyPressed(int key) {
 }
 
 void testApp::exit(){
+    vidGrabber.close();
     gui->saveSettings("GUI/guiSettings.xml");
     delete gui;
 }
 
 void testApp::guiEvent(ofxUIEventArgs &e){
 	
+	string name = e.widget->getName();
+	int kind = e.widget->getKind();
+    
+    if(kind == OFX_UI_WIDGET_LABELTOGGLE)
+    {
+        ofxUILabelToggle *toggle = (ofxUILabelToggle *) e.widget;
+        
+        if (name == "connect") {
+            
+            cout << toggle->getValue() << endl;
+            
+            if (toggle->getValue() == 1) {
+                connect();
+                toggle->setLabelText("disconnect");
+            } else {
+                disconnect();
+                toggle->setLabelText("connect");
+            }
+        }
+    }
 }
 
 void testApp::readConfig(){
@@ -262,4 +320,22 @@ void testApp::readConfig(){
     cout << "Read settings from file: " << endl;
     cout << "vidDeviceId: " << ofToString(vidDeviceId) << endl;
     cout << "vidFrameRate: " << ofToString(vidFrameRate) << endl;
+}
+
+void testApp::connect() {
+    
+    // Getting host textinput value
+    ofxUITextInput *hostWidget = (ofxUITextInput *) gui->getWidget("hostInput");
+    host = hostWidget->getTextString();
+    
+    // Getting port textinput value
+    ofxUITextInput *portWidget = (ofxUITextInput *) gui->getWidget("portInput");
+    port = ofToInt(portWidget->getTextString());
+    
+    sender.setup(host, port);
+    bConnected = true;
+}
+
+void testApp::disconnect() {
+    bConnected = false;
 }
